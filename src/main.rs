@@ -74,21 +74,39 @@ struct RGB {
     blue: u8,
 }
 
+fn get_hue_url() -> String {
+    format!(
+        "https://{}/api/{}/groups",
+        dotenv!("HUE_IP"),
+        dotenv!("HUE_USER")
+    )
+}
+
 async fn get_hue() -> Result<HashMap<String, Group>, Box<dyn std::error::Error>> {
     let resp: HashMap<String, Group> = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .unwrap()
-        .get(format!(
-            "https://{}/api/{}/groups",
-            dotenv!("HUE_IP"),
-            dotenv!("HUE_USER")
-        ))
+        .get(get_hue_url())
         .send()
         .await?
         .json()
         .await?;
     return Ok(resp);
+}
+
+async fn toggle_hue_group(group: String, state: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let mut map = HashMap::new();
+    map.insert("on", state);
+    reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap()
+        .put(format!("{}/{}/action", get_hue_url(), group))
+        .json(&map)
+        .send()
+        .await?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -101,6 +119,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 HueCommands::List {} => {
                     let resp = get_hue().await?;
                     println!("{:#?}", resp);
+                }
+                HueCommands::On { group, color } => {
+                    toggle_hue_group(group, true).await?;
+                }
+                HueCommands::Off { group } => {
+                    toggle_hue_group(group, false).await?;
                 }
                 _ => {
                     println!("need to be implemented")
